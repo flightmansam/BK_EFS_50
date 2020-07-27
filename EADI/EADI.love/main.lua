@@ -306,9 +306,9 @@ function love.draw()
 
     -- AH ----------------------------------------------------------------------------------------
     sx, sy = scale_factor(att_lines, 2.0)
-    sy = (sy*att_lines:getHeight())/200 -- how much to scale the attitiude image (180º + 10º each side)
-    rotOrigin = {x=(0.5*SCREENWIDTH)+(sy*attitude*math.sin(-dv.r)), 
-                 y=(0.5*SCREENHEIGHT)+(sy*attitude*math.cos(-dv.r))}
+    sy_rot = (sy*att_lines:getHeight())/200 -- how much to scale the attitiude image (180º + 10º each side)
+    rotOrigin = {x=(0.5*SCREENWIDTH)+(sy_rot*attitude*math.sin(-dv.r)), 
+                 y=(0.5*SCREENHEIGHT)+(sy_rot*attitude*math.cos(-dv.r))}
     love.graphics.push() -- push the frame buffer out of the main canvas (makes a reference frame for the rotation+translation of shapes for attiude+roll)
     love.graphics.translate(rotOrigin.x, rotOrigin.y)
     love.graphics.rotate(dv.r)
@@ -352,9 +352,10 @@ function love.draw()
         -- flight director
         sx, sy = scale_factor(flight_director, 1/17)
         love.graphics.draw(flight_director, 
-                            rotOrigin.x+(sy*fd_attitude*math.sin(-dv.r)), 
-                            rotOrigin.y+(sy*fd_attitude*math.cos(-dv.r)), dv.h+dv.r, sx, sy,
+                            rotOrigin.x+(sy_rot*fd_attitude*math.sin(-dv.r)), 
+                            rotOrigin.y+(sy_rot*fd_attitude*math.cos(-dv.r)), dv.h+dv.r, sx, sy,
                             flight_director:getWidth()/2)
+
 
     love.graphics.setStencilTest()
 
@@ -403,8 +404,10 @@ function love.draw()
     bug_dimmensions = {x=0.01*SCREENWIDTH, y=0.03*SCREENHEIGHT}
     sx_loc, sy_loc = scale_factor(localiser.norm, 1/38)
 
+    bank_limit = 60
+    att_limit = 15
     loc = localiser.norm
-    if state == states.APPROACH then
+    if state == states.APPROACH and math.abs(bank) < bank_limit and attitude < att_limit then
         love.graphics.stencil(mask,"replace", 1 ) -- mask is the black border 
         love.graphics.setStencilTest("greater", 0)
         -- rising runway
@@ -419,21 +422,25 @@ function love.draw()
         0.7*SCREENHEIGHT, 0, sx, sy,
         runway:getWidth()/2, 0.3*runway:getHeight())  
         love.graphics.setStencilTest()
-
         loc = localiser.apr
+
     end
         
 
-    love.graphics.draw(loc, 0.5*SCREENWIDTH, 0.82*SCREENHEIGHT, 0,
-                        sx_loc, sy_loc, 
-                        localiser.norm:getWidth()/2 - 1,  (localiser.norm:getHeight()/2))
-
-    if state == states.NORM then
+    if state == states.NORM or math.abs(bank) > bank_limit or attitude > att_limit then
         love.graphics.setColor(green)
         love.graphics.rectangle("fill", 0.5*SCREENWIDTH+(dv.l*sx_loc*localiser.norm:getWidth()/10)-(bug_dimmensions.x/2), 
                             0.82*SCREENHEIGHT-(bug_dimmensions.y/2), 
-                            bug_dimmensions.x, bug_dimmensions.y) 
+                            bug_dimmensions.x, bug_dimmensions.y)
+        if math.abs(bank) > bank_limit or attitude > att_limit then
+            loc = localiser.apr
+        end
     end
+
+    love.graphics.setColor(white)
+    love.graphics.draw(loc, 0.5*SCREENWIDTH, 0.82*SCREENHEIGHT, 0,
+    sx_loc, sy_loc, 
+    localiser.norm:getWidth()/2 - 1,  (localiser.norm:getHeight()/2))
 
 
 -- AP modes --------------------------------------------------------------------------------------
