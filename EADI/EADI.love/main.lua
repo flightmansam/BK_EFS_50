@@ -6,27 +6,31 @@
 -- "g" + scroll = glide slope
 -- "a" + scroll = airspeed
 
-
-
 ver = "BENDIX/KING EFS50 EADI v1"
 sky =  {0x2A/255.0, 0x6C/255.0, 0xA5/255.0} 
 ground =  {0x78/255.0, 0x5C/255.0, 0x3D/255.0}
 pilot_side_amber = {239/255.0, 151/255.0, 0/255.0}
 green = {0/255.0, 158/255.0, 60/255.0}
 white = {1, 1, 1, 1}
-debug = false
+debug = true
+
+local sim_data -- Our thread object.
 
 if love.system.getOS() == "iOS" then
     resizable = true
     fullscreen = true
-else   
-    resizable = false
-    fullscreen = false
     SCREENWIDTH = 1024
-    if love.graphics.getDimensions() < SCREENWIDTH then
-        SCREENWIDTH = 800
-    end
+    SCREENWIDTH = 1024
     SCREENHEIGHT = SCREENWIDTH 
+else   
+    resizable = true
+    fullscreen = false
+    SCREENHEIGHT = 1024
+   
+    if 0 < SCREENHEIGHT then
+        SCREENHEIGHT = 800
+    end
+    SCREENWIDTH = SCREENHEIGHT 
 end
 
 local states = {COLD=1, NORM=2, APPROACH=3}
@@ -62,12 +66,14 @@ ap = {
 }
 
 function love.load()
-    
     love.window.setMode(SCREENWIDTH, SCREENHEIGHT, {fullscreen=fullscreen, resizable=resizable})
-
+    
     DEBUG_FONT = love.graphics.getFont()
     FONT = love.graphics.newFont("res/BebasNeue Book.otf", 80)
     SCALE_FONT = love.graphics.newFont("res/BebasNeue Regular.otf", 80) -- font for compass and attitude lines
+
+    sim_data = love.thread.newThread( "xplane.lua" )
+    sim_data:start()
   
 
     -- images
@@ -178,71 +184,37 @@ timers = {
     IM = 100,-- MM is offset from OM by 100 update cycles
     APR = 0
 }
+
+
 function love.update(dt)
     if resizable then
         SCREENWIDTH, SCREENHEIGHT = love.graphics.getDimensions()-- love.window.getDesktopDimensions()
         skyWidth = math.min(100*SCREENWIDTH, 100*SCREENHEIGHT)
     end
 
+    dv =  love.thread.getChannel("to_panel"):demand()
+
     -- test data
     if love.system.getOS() == "iOS" then
         dv.l = 5 * math.sin(dv.r)
         dv.g = 5 * math.cos(dv.a)
         dv.aa = 5 * math.sin((-dv.g))
-        dh.h = math.sin(dv.aa)
+        dv.h = math.sin(dv.aa)
     end
 
+    -- get debug variables from other thread
 
-    -- clamping test data to appropriate sizes
-    if dv.r >= 2*math.pi then
-        dv.r = 0
-    elseif dv.r <= -2*math.pi then
-        dv.r = 0
-    end
-
-    if dv.fd.r >= 2*math.pi then
-        dv.fd.r = 0
-    elseif dv.fd.r <= -2*math.pi then
-        dv.fd.r = 0
-    end
-
-    if dv.h >= 2*math.pi then
-        dv.h = 0
-    end
-    if dv.h < 0 then
-        dv.h = 0
-    end
-
-    if dv.a >= math.pi/2 then
-        dv.a = math.pi/2
-    elseif dv.a <= -math.pi/2 then
-        dv.a = -math.pi/2
-    end
-
-    if dv.fd.a >= math.pi/2 then
-        dv.fd.a = math.pi/2
-    elseif dv.fd.a <= -math.pi/2 then
-        dv.fd.a = -math.pi/2
-    end
-
-    if dv.l >= 5 then
-        dv.l = 5
-    elseif dv.l <= -5 then
-        dv.l = -5
-    end
-
-    if dv.g >= 5 then
-        dv.g = 5
-    elseif dv.g <= -5 then
-        dv.g = -5
-    end
-
-    if dv.aa >= 5 then
-        dv.aa = 5
-    elseif dv.aa <= -5 then
-        dv.aa = -5
-    end
+    -- dv = {a = 0, --att debug
+    -- r = 0, --roll debug
+    -- h = 0, --heading debug
+    -- g = 0, --glideslope debug
+    -- l = 0, --localiser debug
+    -- fd = {r=0, a=0}, -- flight director roll and attitude
+    -- aa = 0,--AS debug
+    -- ra = 2450,
+    -- dh = 180} --DH debug}
     ----------------------------
+
 
     attitude = 90*math.sin(dv.a)
     fd_attitude = 90*math.sin(dv.fd.a)
@@ -295,11 +267,15 @@ function love.update(dt)
         dv.ra = 2450
     end
 
-
-
+    -- push radar-alt to sim state
+    love.thread.getChannel("from_panel"):push({["ra"]=dv.ra})
 
 end
 
+-- function love.threaderror(thread, errorstr)
+--     print("Thread error!\n"..errorstr)
+--     -- thread:getError() will return the same error string now.
+--   end
 
 
 function love.draw()
@@ -406,35 +382,11 @@ function love.draw()
 
     bank_limit = 60
     att_limit = 15
-    loc = localiser.norm
-    if state == states.APPROACH and math.abs(bank) < bank_limit and attitude < att_limit then
-        love.graphics.stencil(mask,"replace", 1 ) -- mask is the black border 
-        love.graphics.setStencilTest("greater", 0)
-        -- rising runway
-        love.graphics.setColor(white)
-        if dv.ra < 200 then
-            sx, sy = scale_factor(runway, ((200-dv.ra)/200)*(1/3) + (1/8))
-        else
-            sx, sy = scale_factor(runway, 1/8)
-        end
-        love.graphics.draw(runway, 
-        0.5*SCREENWIDTH+(dv.l*sx_loc*localiser.norm:getWidth()/10), 
-        0.7*SCREENHEIGHT, 0, sx, sy,
-        runway:getWidth()/2, 0.3*runway:getHeight())  
-        love.graphics.setStencilTest()
+    
+    if state == states.APPROACH then
         loc = localiser.apr
-
-    end
-        
-
-    if state == states.NORM or math.abs(bank) > bank_limit or attitude > att_limit then
-        love.graphics.setColor(green)
-        love.graphics.rectangle("fill", 0.5*SCREENWIDTH+(dv.l*sx_loc*localiser.norm:getWidth()/10)-(bug_dimmensions.x/2), 
-                            0.82*SCREENHEIGHT-(bug_dimmensions.y/2), 
-                            bug_dimmensions.x, bug_dimmensions.y)
-        if math.abs(bank) > bank_limit or attitude > att_limit then
-            loc = localiser.apr
-        end
+    elseif state == states.NORM then 
+        loc = localiser.norm 
     end
 
     love.graphics.setColor(white)
@@ -442,12 +394,44 @@ function love.draw()
     sx_loc, sy_loc, 
     localiser.norm:getWidth()/2 - 1,  (localiser.norm:getHeight()/2))
 
+    if state == states.APPROACH then -- and 
+        if math.abs(bank) < bank_limit and attitude < att_limit then
+            love.graphics.stencil(mask,"replace", 1 ) -- mask is the black border 
+            love.graphics.setStencilTest("greater", 0)
+            -- rising runway
+            love.graphics.setColor(white)
+            if dv.ra < 200 then
+                sx, sy = scale_factor(runway, ((200-dv.ra)/200)*(1/3) + (1/8))
+            else
+                sx, sy = scale_factor(runway, 1/8)
+            end
+            love.graphics.draw(runway, 
+            0.5*SCREENWIDTH+(dv.l*sx_loc*localiser.norm:getWidth()/10), 
+            0.7*SCREENHEIGHT, 0, sx, sy,
+            runway:getWidth()/2, 0.3*runway:getHeight())  
+            love.graphics.setStencilTest()
+        else
+            love.graphics.setColor(green)
+            love.graphics.rectangle("fill", 0.5*SCREENWIDTH+(dv.l*sx_loc*localiser.norm:getWidth()/10)-(bug_dimmensions.x/2), 
+                            0.82*SCREENHEIGHT-(bug_dimmensions.y/2), 
+                            bug_dimmensions.x, bug_dimmensions.y)
+        end
+        loc = localiser.apr
+    
+    elseif state == states.NORM then
+        love.graphics.setColor(green)
+            love.graphics.rectangle("fill", 0.5*SCREENWIDTH+(dv.l*sx_loc*localiser.norm:getWidth()/10)-(bug_dimmensions.x/2), 
+                            0.82*SCREENHEIGHT-(bug_dimmensions.y/2), 
+                            bug_dimmensions.x, bug_dimmensions.y)
+    end
+
+
+
 
 -- AP modes --------------------------------------------------------------------------------------
 
 -- LARGE FONTS: AP, YD, DH value, RA value
-sx= 0.8
-sy = sx
+sx, sy = scale_factor(FONT, 1/10)
 love.graphics.setColor(white)
 
 if ap.AP then love.graphics.print("AP", FONT, 0.1*SCREENWIDTH, 0.05*SCREENHEIGHT, 0, sx, sy) end
@@ -457,27 +441,25 @@ if ap.DH then love.graphics.print(dv.dh, FONT, 0.90*SCREENWIDTH, 0.85*SCREENHEIG
 
 -- MEDIUM FONTS: DH, RA, lon, vert
 -- modes={lat_eng="HDG", lat_arm="LOC", vert_eng="ALT", vert_arm="GS"},
-sx= 0.6
-sy = sx
+sx, sy = scale_factor(FONT, 1/15)
 
-if ap.RA then love.graphics.print("RA", FONT, 0.90*SCREENWIDTH, 0.12*SCREENHEIGHT, 0, sx, sy, FONT:getWidth("DH")) end
-if ap.DH then love.graphics.print("DH", FONT, 0.90*SCREENWIDTH, 0.8*SCREENHEIGHT, 0, sx, sy, FONT:getWidth("DH")) end
+if ap.RA then love.graphics.print("RA", FONT, 0.90*SCREENWIDTH, 0.128*SCREENHEIGHT, 0, sx, sy, FONT:getWidth("DH")) end
+if ap.DH then love.graphics.print("DH", FONT, 0.90*SCREENWIDTH, 0.797*SCREENHEIGHT, 0, sx, sy, FONT:getWidth("DH")) end
 
 love.graphics.setColor(ap.modes.lat_eng.c)
-if ap.modes.lat_eng.m then love.graphics.print(ap.modes.lat_eng.m, FONT, 0.3*SCREENWIDTH, 0.06*SCREENHEIGHT, 0, sx, sy) end
+if ap.modes.lat_eng.m then love.graphics.print(ap.modes.lat_eng.m, FONT, 0.3*SCREENWIDTH, 0.055*SCREENHEIGHT, 0, sx, sy) end
 
 love.graphics.setColor(ap.modes.lat_arm.c)
 if ap.modes.lat_arm.m then love.graphics.print(ap.modes.lat_arm.m, FONT, 0.3*SCREENWIDTH, 0.11*SCREENHEIGHT, 0, sx, sy) end
 
 love.graphics.setColor(ap.modes.vert_eng.c)
-if ap.modes.vert_eng.m then love.graphics.print(ap.modes.vert_eng.m, FONT, 0.6*SCREENWIDTH, 0.06*SCREENHEIGHT, 0, sx, sy) end
+if ap.modes.vert_eng.m then love.graphics.print(ap.modes.vert_eng.m, FONT, 0.6*SCREENWIDTH, 0.055*SCREENHEIGHT, 0, sx, sy) end
 
 love.graphics.setColor(ap.modes.vert_arm.c)
 if ap.modes.vert_arm.m then love.graphics.print(ap.modes.vert_arm.m, FONT, 0.6*SCREENWIDTH, 0.11*SCREENHEIGHT, 0, sx, sy) end
 
 -- SMALL FONTS: SR, HB, CWS
-sx= 0.5
-sy = sx
+sx, sy = scale_factor(FONT, 1/20)
 love.graphics.setColor(white)
 if ap.aux.SR then love.graphics.print("SR", FONT, 0.2*SCREENWIDTH, 0.06*SCREENHEIGHT, 0, sx, sy) end
 if ap.aux.HB then love.graphics.print("HB", FONT, 0.2*SCREENWIDTH, 0.11*SCREENHEIGHT, 0, sx, sy) end
@@ -522,6 +504,10 @@ if ap.OM then love.graphics.draw(markers.OM, 0.12*SCREENWIDTH, 0.84*SCREENHEIGHT
         love.graphics.setColor(0, 0.5, 0.5, 1)
         love.graphics.print(string.format("h = %.1f", 360*math.sin(dv.h)), 0.7*SCREENWIDTH, 0.8*SCREENHEIGHT)
 
+        -- thread
+        love.graphics.setColor(0.5, 0.5, 0, 1)
+        love.graphics.print(tostring(dv), 0.3*SCREENWIDTH, 0.8*SCREENHEIGHT)
+
     end
 
     
@@ -532,80 +518,6 @@ function scale_factor(img, sf)
     -- aspectRatio = SCREENWIDTH / SCREENHEIGHT
     local sy =  sf * SCREENHEIGHT / img:getHeight()
     return sy, sy
-end
-
-function love.wheelmoved(x, y)
-    if love.keyboard.isDown("r") then
-        if y > 0 then
-            dv.r = dv.r + 0.1
-        elseif y < 0 then
-            dv.r = dv.r - 0.1
-        end
-    elseif love.keyboard.isDown("l") then
-        if y > 0 then
-            dv.l = dv.l + 0.1
-        elseif y < 0 then
-            dv.l = dv.l - 0.1
-        end
-    elseif love.keyboard.isDown("g") then
-        if y > 0 then
-            dv.g = dv.g + 0.1
-        elseif y < 0 then
-            dv.g = dv.g - 0.1
-        end
-    elseif love.keyboard.isDown("h") then
-        if y > 0 then
-            dv.h = dv.h + 0.1
-        elseif y < 0 then
-            dv.h = dv.h - 0.1
-        end
-    elseif love.keyboard.isDown("f") then
-        if y > 0 then
-            dv.fd.a = dv.fd.a + 0.03
-        elseif y < 0 then
-            dv.fd.a = dv.fd.a - 0.035
-        end
-    elseif love.keyboard.isDown("a") then
-        if y > 0 then
-            dv.aa = dv.aa + 0.1
-        elseif y < 0 then
-            dv.aa = dv.aa - 0.1
-        end
-    else
-        if y > 0 then
-            dv.a = dv.a + 0.03
-        elseif y < 0 then
-            dv.a = dv.a - 0.035
-        end
-    end
-end
-
-function love.touchmoved(id, x, y, dx, dy, pressure)
-    if id == 1 then
-        if dx > 0 then
-            dv.l = dv.l + 0.1
-        elseif dx < 0 then
-            dv.l = dv.l - 0.1
-        end
-
-        if dy > 0 then
-            dv.a = dv.a + 0.01
-        elseif dy < 0 then
-            dv.a = dv.a - 0.01
-        end
-    else
-        if dx > 0 then
-            dv.r = dv.r + 0.01
-        elseif dx < 0 then
-            dv.r = dv.r - 0.01
-        end
-
-        if dy > 0 then
-            dv.a = dv.a + 0.01
-        elseif dy < 0 then
-            dv.a = dv.a - 0.01
-        end
-    end
 end
 
 function draw_gs_bug(x, y, sx, sy)
@@ -636,5 +548,10 @@ function draw_as_bug(x, y, sx, sy)
     love.graphics.pop()
 
 end
+
+-- function love.quit()
+--     sim_data:wait(10)
+--     love.event.quit()
+-- end
 
     
