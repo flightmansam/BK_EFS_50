@@ -3,6 +3,8 @@
 require 'love.event'
 require 'love.keyboard'
 require 'love.timer'
+require 'love.system'
+local socket = require "socket"
 
 local dv = {a = 0,       -- att debug
         r = 0,           -- roll debug
@@ -16,9 +18,41 @@ local dv = {a = 0,       -- att debug
 
 love.thread.getChannel('to_panel'):push(dv)
 local last_frame = love.timer.getTime()
-da = 0.01
+local address, port
+-- the address and port of the server
+if love.system.getOS() == "iOS" then
+    address, port = "192.168.1.110", 49002
+else
+    address, port = "127.0.0.1", 49002
+end
+local updaterate = 0.1 -- how long to wait, in seconds, before requesting an update
+
+local da = 0.01
+
+print("loaded")
+udp = socket.udp()
+udp:settimeout(0)
+udp:setsockname(address, port)
+
 
 while true do
+    data, msg_or_ip, port_or_nil = udp:receivefrom()
+    if data then
+        local index = string.byte(data, 6)
+        print(index)
+        print(string.byte(data, 10, 13))
+        if index == 17 then
+            local pitch = love.data.unpack("f", string.sub(data, 10, 13))
+            local roll = love.data.unpack("f", string.sub(data, 14, 17))
+            local hdg_t = love.data.unpack("f", string.sub(data, 18, 21))
+            local hdg_m = love.data.unpack("f", string.sub(data, 22, 25))
+            -- pitch = string.unpack("f", pitch)
+            dv.a = (math.pi * pitch) / 180
+            dv.r = (math.pi * - roll) / 180
+            dv.h = (math.pi * hdg_m) / 180
+        end
+    end
+
     local dt = love.timer.getTime() - last_frame --distance between last frame
     if dt > love.timer.getAverageDelta()/3 then
         love.thread.getChannel('to_panel'):clear() -- garbage collect

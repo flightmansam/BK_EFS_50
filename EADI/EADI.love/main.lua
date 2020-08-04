@@ -12,7 +12,7 @@ ground =  {0x78/255.0, 0x5C/255.0, 0x3D/255.0}
 pilot_side_amber = {239/255.0, 151/255.0, 0/255.0}
 green = {0/255.0, 158/255.0, 60/255.0}
 white = {1, 1, 1, 1}
-debug = true
+debug = false
 
 local sim_data -- Our thread object.
 
@@ -194,13 +194,13 @@ function love.update(dt)
 
     dv =  love.thread.getChannel("to_panel"):demand()
 
-    -- test data
-    if love.system.getOS() == "iOS" then
-        dv.l = 5 * math.sin(dv.r)
-        dv.g = 5 * math.cos(dv.a)
-        dv.aa = 5 * math.sin((-dv.g))
-        dv.h = math.sin(dv.aa)
-    end
+    -- -- test data
+    -- if love.system.getOS() == "iOS" then
+    --     dv.l = 5 * math.sin(dv.r)
+    --     dv.g = 5 * math.cos(dv.a)
+    --     dv.aa = 5 * math.sin((-dv.g))
+    --     dv.h = math.sin(dv.aa)
+    -- end
 
     -- get debug variables from other thread
 
@@ -216,7 +216,7 @@ function love.update(dt)
     ----------------------------
 
 
-    attitude = 90*math.sin(dv.a)
+    attitude = 180/math.pi*dv.a
     fd_attitude = 90*math.sin(dv.fd.a)
     bank = 180/math.pi*dv.r
 
@@ -311,7 +311,7 @@ function love.draw()
         sx_hdg, sy_hdg = scale_factor(hdg_lines, 1/40)
         love.graphics.setColor(white)
         -- center
-        hdg_offset = (hdg_lines:getWidth()/36)+(hdg_lines:getWidth()*(35/36)*math.sin(dv.h))
+        hdg_offset = (hdg_lines:getWidth()/36)+(hdg_lines:getWidth()*(35/36)*(180/math.pi*dv.h)/360)
         love.graphics.draw(hdg_lines, rotOrigin.x, rotOrigin.y, dv.r, sx_hdg, sy_hdg, 
         hdg_offset, hdg_lines:getHeight())
         
@@ -329,7 +329,7 @@ function love.draw()
         sx, sy = scale_factor(flight_director, 1/17)
         love.graphics.draw(flight_director, 
                             rotOrigin.x+(sy_rot*fd_attitude*math.sin(-dv.r)), 
-                            rotOrigin.y+(sy_rot*fd_attitude*math.cos(-dv.r)), dv.h+dv.r, sx, sy,
+                            rotOrigin.y+(sy_rot*fd_attitude*math.cos(-dv.r)), dv.r, sx, sy,
                             flight_director:getWidth()/2)
 
 
@@ -502,7 +502,8 @@ if ap.OM then love.graphics.draw(markers.OM, 0.12*SCREENWIDTH, 0.84*SCREENHEIGHT
 
         -- h
         love.graphics.setColor(0, 0.5, 0.5, 1)
-        love.graphics.print(string.format("h = %.1f", 360*math.sin(dv.h)), 0.7*SCREENWIDTH, 0.8*SCREENHEIGHT)
+        love.graphics.print(string.format("h = %.1f", 180/math.pi*dv.h), 0.7*SCREENWIDTH, 0.8*SCREENHEIGHT)
+        love.graphics.print(string.format("dv.h = %.1f", dv.h), 0.7*SCREENWIDTH, 0.85*SCREENHEIGHT)
 
         -- thread
         love.graphics.setColor(0.5, 0.5, 0, 1)
