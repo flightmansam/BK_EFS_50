@@ -25,7 +25,6 @@ if love.system.getOS() == "iOS" then
 else
     address, port = "127.0.0.1", 49002
 end
-local updaterate = 0.1 -- how long to wait, in seconds, before requesting an update
 
 local da = 0.01
 
