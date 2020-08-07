@@ -32,9 +32,9 @@ print("loaded")
 udp = socket.udp()
 udp:settimeout(0)
 udp:setsockname(address, port)
+local running = true
 
-
-while true do
+while running do
     data, msg_or_ip, port_or_nil = udp:receivefrom()
     if data then
         local index = string.byte(data, 6)
@@ -59,74 +59,77 @@ while true do
         last_frame = love.timer.getTime()
     end
 
-    for n, a, b, c, d, e, f in love.event.poll() do
-        if n == 'quit' then
-            love.event.quit()
-        elseif n == "wheelmoved" then
-            y = b
-            if love.keyboard.isDown("r") then
-                if y > 0 then
-                    dv.r = dv.r + 0.1
-                elseif y < 0 then
-                    dv.r = dv.r - 0.1
-                end
-            elseif love.keyboard.isDown("l") then
-                if y > 0 then
-                    dv.l = dv.l + 0.1
-                elseif y < 0 then
-                    dv.l = dv.l - 0.1
-                end
-            elseif love.keyboard.isDown("g") then
-                if y > 0 then
-                    dv.g = dv.g + 0.1
-                elseif y < 0 then
-                    dv.g = dv.g - 0.1
-                end
-            elseif love.keyboard.isDown("h") then
-                if y > 0 then
-                    dv.h = dv.h + 0.1
-                elseif y < 0 then
-                    dv.h = dv.h - 0.1
-                end
-            elseif love.keyboard.isDown("f") then
-                if y > 0 then
-                    dv.fd.a = dv.fd.a + 0.03
-                elseif y < 0 then
-                    dv.fd.a = dv.fd.a - 0.035
-                end
-            elseif love.keyboard.isDown("a") then
-                if y > 0 then
-                    dv.aa = dv.aa + 0.1
-                elseif y < 0 then
-                    dv.aa = dv.aa - 0.1
-                end
-            else
-                if y > 0 then
-                    dv.a = dv.a + 0.03
-                elseif y < 0 then
-                    dv.a = dv.a - 0.035
-                end
-            end
-        elseif n == "touchmoved" then
-            dx = d
-            dy = e
-            if dx > 0 then
-                dv.r = dv.r + 0.01
-            elseif dx < 0 then
-                dv.r = dv.r - 0.01
-            end
+    -- for n, a, b, c, d, e, f in love.event.poll() do
+    --     if n == 'blah' then
+    --         print("quiting!")
+    --         love.event.push('quit', 1)
+    --         return
+    --     elseif n == "wheelmoved" then
+    --         y = b
+    --         if love.keyboard.isDown("r") then
+    --             if y > 0 then
+    --                 dv.r = dv.r + 0.1
+    --             elseif y < 0 then
+    --                 dv.r = dv.r - 0.1
+    --             end
+    --         elseif love.keyboard.isDown("l") then
+    --             if y > 0 then
+    --                 dv.l = dv.l + 0.1
+    --             elseif y < 0 then
+    --                 dv.l = dv.l - 0.1
+    --             end
+    --         elseif love.keyboard.isDown("g") then
+    --             if y > 0 then
+    --                 dv.g = dv.g + 0.1
+    --             elseif y < 0 then
+    --                 dv.g = dv.g - 0.1
+    --             end
+    --         elseif love.keyboard.isDown("h") then
+    --             if y > 0 then
+    --                 dv.h = dv.h + 0.1
+    --             elseif y < 0 then
+    --                 dv.h = dv.h - 0.1
+    --             end
+    --         elseif love.keyboard.isDown("f") then
+    --             if y > 0 then
+    --                 dv.fd.a = dv.fd.a + 0.03
+    --             elseif y < 0 then
+    --                 dv.fd.a = dv.fd.a - 0.035
+    --             end
+    --         elseif love.keyboard.isDown("a") then
+    --             if y > 0 then
+    --                 dv.aa = dv.aa + 0.1
+    --             elseif y < 0 then
+    --                 dv.aa = dv.aa - 0.1
+    --             end
+    --         else
+    --             if y > 0 then
+    --                 dv.a = dv.a + 0.03
+    --             elseif y < 0 then
+    --                 dv.a = dv.a - 0.035
+    --             end
+    --         end
+    --     elseif n == "touchmoved" then
+    --         dx = d
+    --         dy = e
+    --         if dx > 0 then
+    --             dv.r = dv.r + 0.01
+    --         elseif dx < 0 then
+    --             dv.r = dv.r - 0.01
+    --         end
 
-            if dy > 0 then
-                dv.a = dv.a + 0.01
-            elseif dy < 0 then
-                dv.a = dv.a - 0.01
-            end           
-        end	
-    end
+    --         if dy > 0 then
+    --             dv.a = dv.a + 0.01
+    --         elseif dy < 0 then
+    --             dv.a = dv.a - 0.01
+    --         end           
+    --     end	
+    -- end
 
     -- pull any changes from panel
     local from = love.thread.getChannel("from_panel"):pop()
     if from then
+        -- if from == 'quit' then return end
         for k, v in pairs(from) do
             dv[k] = v
         end

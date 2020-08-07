@@ -550,9 +550,12 @@ function draw_as_bug(x, y, sx, sy)
 
 end
 
--- function love.quit()
---     sim_data:wait(10)
---     love.event.quit()
--- end
+function love.quit()
+    print("quiting thread")
+    love.thread.getChannel("from_panel"):push("quit")
+    sim_data:wait()
+    print("quited thread")
+    return false
+end
 
     
